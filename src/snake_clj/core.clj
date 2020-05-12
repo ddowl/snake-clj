@@ -3,7 +3,28 @@
 
 ; =========== UPDATE ==========
 
-(defn update-game [state] state)
+(defn move-snake [state]
+  (let [snake (:snake state)
+        dir (:dir state)
+        moved-snake (map (fn [[x y]]
+                           (case dir
+                             :up [x (dec y)]
+                             :down [x (inc y)]
+                             :left [(dec x) y]
+                             :right [(inc x) y]))
+                         snake)]
+    (assoc state :snake moved-snake)))
+
+
+(defn eat-food [state] state)
+
+(defn end-game [state] state)
+
+(defn update-game [state]
+  (-> state
+      move-snake
+      eat-food
+      end-game))
 
 ; =========== VIEW ============
 
@@ -11,7 +32,7 @@
 
 (defn print-game [state]
   (let [food (:food state)
-        snake (get-in state [:snake :body])
+        snake (:snake state)
         width (:width state)
         height (:height state)]
     (doseq [y (range height)]
@@ -31,8 +52,8 @@
   "Runs a game of Snake in the terminal"
   [& args]
   (loop [state {:food [4 5]
-                :snake {:body [[2 1] [2 2] [2 3]]
-                        :dir :down}
+                :snake [[2 1] [2 2] [2 3]]
+                :dir :down
                 :game-over? false
                 :width 15
                 :height 10}]
