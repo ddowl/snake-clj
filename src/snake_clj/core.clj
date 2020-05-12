@@ -1,66 +1,98 @@
 (ns snake-clj.core
-  (:require [clojure.term.colors :as tc]))
+  (:require [lanterna.screen :as s]))
 
 ; =========== UPDATE ==========
 
-(defn move-snake [state]
-  (let [snake (:snake state)
-        dir (:dir state)
-        moved-snake (map (fn [[x y]]
-                           (case dir
-                             :up [x (dec y)]
-                             :down [x (inc y)]
-                             :left [(dec x) y]
-                             :right [(inc x) y]))
-                         snake)]
-    (assoc state :snake moved-snake)))
+(defn next-cell [[x y] dir]
+  (case dir
+    :up [x (dec y)]
+    :down [x (inc y)]
+    :left [(- x 2) y]
+    :right [(+ x 2) y]))
 
+; TODO: buffer directional inputs
+(defn next-dir [screen dir]
+  (let [dir-in (or (s/get-key-blocking screen {:timeout 10}) dir)]
+    (case [dir-in dir]
+      [:up :down] :down
+      [:down :up] :up
+      [:left :right] :right
+      [:right :left] :left
+      dir-in)))
 
-(defn eat-food [state] state)
+(defn rand-cell [w h]
+  [(rand-nth (range 0 w 2))
+   (rand-nth (range 0 h 2))])
 
-(defn end-game [state] state)
+(defn out-of-bounds? [state]
+  (let [width (:width state)
+        height (:height state)
+        [[x y] & _] (:snake state)]
+    (or (< x 0) (< y 0) (>= x width) (>= y height))))
 
+(defn overlap? [state]
+  (let [[head & tail] (:snake state)]
+    (some #(= head %) tail)))
+
+(defn game-over? [state]
+  (or (out-of-bounds? state) (overlap? state)))
+
+; TODO: come up with cleaner way to compose state updates
+; game over check, update dir, move snake and food
 (defn update-game [state]
-  (-> state
-      move-snake
-      eat-food
-      end-game))
+  (if (game-over? state)
+    (assoc state :game-over? true)
+    (let [snake (:snake state)
+          screen (:screen state)
+          width (:width state)
+          height (:height state)
+          dir (next-dir screen (:dir state))
+          food (:food state)
+          new-head (next-cell (last snake) dir)]
+      (if (= food new-head)
+        (assoc state
+          :dir dir
+          :snake (conj snake new-head)
+          :food (rand-cell width height))
+        (assoc state
+          :dir dir
+          :snake (conj (pop snake) new-head))))))
 
 ; =========== VIEW ============
 
 (def block "██")
 
-(defn print-game [state]
-  (let [food (:food state)
-        snake (:snake state)
-        width (:width state)
-        height (:height state)]
-    (doseq [y (range height)]
-      (doseq [x (range width)]
-        (let [curr-coords [x y]]
-          (cond
-            (= curr-coords food) (print (tc/red block))
-            (some #(= curr-coords %) snake) (print (tc/green block))
-            :else (print (tc/yellow block)))))
-      (println))))
-
-(defn clear [] (print (str (char 27) "[2J")))
+(defn draw-game [screen state]
+  (let [[fx fy] (:food state)
+        snake (:snake state)]
+    (s/put-string screen fx fy block {:fg :red})
+    (doseq [[sx sy] snake]
+      (s/put-string screen sx sy block {:fg :green}))))
 
 ; ========= MAIN ==========
+(def screen (s/get-screen :swing))
 
 (defn -main
   "Runs a game of Snake in the terminal"
   [& args]
+  (s/start screen)
+  (s/move-cursor screen -1 -1) ; TODO: doesn't actually hide cursor
   (loop [state {:food [4 5]
-                :snake [[2 1] [2 2] [2 3]]
+                :snake (conj clojure.lang.PersistentQueue/EMPTY ; TODO consider using java.util.ArrayDeque. for better performance retrieving head at last position
+                             [2 1] [2 2] [2 3])
                 :dir :down
                 :game-over? false
+                :screen screen
                 :width 15
                 :height 10}]
     (if (:game-over? state)
-      (println "Game Over!")
+      (do
+        (println "Game Over!") ; TODO: print some stats!
+        (Thread/sleep 3000) ; TODO: wait for signal or something
+        (s/stop screen))
       (let [new-state (update-game state)]
-        (clear)
-        (print-game new-state)
+        (s/clear screen)
+        (draw-game screen new-state)
+        (s/redraw screen)
         (Thread/sleep 100)
         (recur new-state)))))
