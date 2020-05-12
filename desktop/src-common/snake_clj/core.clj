@@ -2,33 +2,56 @@
   (:require [play-clj.core :refer :all]
             [play-clj.g2d :refer :all]))
 
+(declare snake-clj-game main-screen)
+
+(def ^:const block-size 50)
+(def inc-block (partial + block-size))
+(def dec-block (partial + block-size))
+
 (defn move
   [entity direction]
   (case direction
-    :down (update entity :y dec)
-    :up (update entity :y inc)
-    :left (update entity :x dec)
-    :right (update entity :x inc)
+    :down (update entity :y dec-block)
+    :up (update entity :y inc-block)
+    :left (update entity :x dec-block)
+    :right (update entity :x inc-block)
     nil))
+
+(defn block [grid-x grid-y color]
+  (let [x (* grid-x block-size)
+        y (* grid-y block-size)]
+    (shape :filled
+           :set-color color
+           :rect x y block-size block-size)))
+(defn food [grid-x grid-y]
+  (block grid-x grid-y (color :red)))
+
+(defn snake-block [grid-x grid-y]
+  (block grid-x grid-y (color :green)))
 
 (defscreen main-screen
   :on-show
-  (fn [screen entities]
-    (add-timer! screen :move-snake 0 0.5)
-    (update! screen :renderer (stage) :camera (orthographic))
-    (assoc (texture "Clojure-icon.png")
-      :x 50 :y 50 :width 100 :height 100
-      :angle 45 :origin-x 0 :origin-y 0))
+  (fn [screen _]
+    (let [screen (update! screen
+                          :camera (orthographic)
+                          :renderer (stage))
+          tiles-w (/ (game :width) block-size)
+          tiles-h (/ (game :height) block-size)
+          grid-w (* tiles-w block-size)
+          grid-h (* tiles-h block-size)]
+
+      ;(add-timer! screen :game-loop 0.5 0.1)
+      (width! screen grid-w)
+      (height! screen grid-h)
+      [(food 3 4) (snake-block 1 2)]))
+
+
 
   :on-timer
   (fn [screen entities]
     (case (:id screen)
-      :move-snake (move (first entities) :right)
+      :game-loop (move (first entities) :right)
       nil))
-
-  :on-resize
-  (fn [screen entities]
-    (height! screen 600))
 
   :on-render
   (fn [screen entities]
@@ -45,18 +68,6 @@
       (= (:key screen) (key-code :dpad-right))
       (move (first entities) :right)
       (= (:key screen) (key-code :dpad-left))
-      (move (first entities) :left)))
-
-  :on-touch-down
-  (fn [screen entities]
-    (cond
-      (> (game :y) (* (game :height) (/ 2 3)))
-      (move (first entities) :up)
-      (< (game :y) (/ (game :height) 3))
-      (move (first entities) :down)
-      (> (game :x) (* (game :width) (/ 2 3)))
-      (move (first entities) :right)
-      (< (game :x) (/ (game :width) 3))
       (move (first entities) :left))))
 
 
