@@ -1,5 +1,6 @@
 (ns snake-clj.core
-  (:require [lanterna.screen :as s]))
+  (:require [lanterna.screen :as s])
+  (:require [clojure.string :refer [join]]))
 
 ; =========== UPDATE ==========
 
@@ -28,7 +29,7 @@
   (let [width (:width state)
         height (:height state)
         [[x y] & _] (:snake state)]
-    (or (< x 0) (< y 0) (>= x width) (>= y height))))
+    (or (< x 0) (< y 0) (>= x (* width 2)) (>= y height))))
 
 (defn overlap? [state]
   (let [[head & tail] (:snake state)]
@@ -64,7 +65,14 @@
 
 (defn draw-game [screen state]
   (let [[fx fy] (:food state)
-        snake (:snake state)]
+        snake (:snake state)
+        w (:width state)
+        h (:height state)]
+    ; Draw Walls
+    (s/put-string screen 0 h (join (repeat w block)) {:fg :yellow})
+    (doseq [y (range (inc h))]
+      (s/put-string screen (* w 2) y block {:fg :yellow}))
+    ; Draw game elements
     (s/put-string screen fx fy block {:fg :red})
     (doseq [[sx sy] snake]
       (s/put-string screen sx sy block {:fg :green}))))
@@ -83,8 +91,8 @@
                 :dir :down
                 :game-over? false
                 :screen screen
-                :width 15
-                :height 10}]
+                :width 20
+                :height 15}]
     (if (:game-over? state)
       (do
         (println "Game Over!") ; TODO: print some stats!
@@ -94,5 +102,5 @@
         (s/clear screen)
         (draw-game screen new-state)
         (s/redraw screen)
-        (Thread/sleep 100)
+        (Thread/sleep 50)
         (recur new-state)))))
