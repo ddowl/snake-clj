@@ -1,18 +1,19 @@
 (ns snake-clj.core
   (:require [lanterna.screen :as s])
-  (:require [clojure.string :refer [join]]))
+  (:require [clojure.string :refer [join]])
+  (:import (clojure.lang PersistentQueue)))
 
 (def ^:const width 20)
 (def ^:const height 15)
-(def screen  (s/get-screen :swing))
-(def initial-state {:food [4 5]
+(def screen (s/get-screen :swing))
+(def initial-state {:food       [4 5]
                     ; TODO consider using java.util.ArrayDeque. for better performance retrieving head at last position
-                    :snake (conj clojure.lang.PersistentQueue/EMPTY
-                                 [2 1] [2 2] [2 3])
-                    :dir :down
+                    :snake      (conj PersistentQueue/EMPTY
+                                      [2 1] [2 2] [2 3])
+                    :dir        :down
                     :game-over? false
-                    :stats {:turn 0
-                            :food-collected 0}})
+                    :stats      {:turn           0
+                                 :food-collected 0}})
 
 ; =========== UPDATE ==========
 
@@ -64,24 +65,24 @@
 (defn update-game [state]
   (if-let [reason (game-over? state)]
     (assoc state :game-over? reason)
-    (let [snake (:snake state)
-          dir (next-dir (:dir state))
-          food (:food state)
-          turn (get-in state [:stats :turn])
+    (let [snake          (:snake state)
+          dir            (next-dir (:dir state))
+          food           (:food state)
+          turn           (get-in state [:stats :turn])
           food-collected (get-in state [:stats :food-collected])
-          new-head (next-cell (head snake) dir)]
+          new-head       (next-cell (head snake) dir)]
       (if (= food new-head)
         (let [new-snake (conj snake new-head)]
           (assoc state
             :dir dir
             :snake new-snake
             :food (open-rand-cell new-snake)
-            :stats {:turn (inc turn)
+            :stats {:turn           (inc turn)
                     :food-collected (inc food-collected)}))
         (assoc state
           :dir dir
           :snake (conj (pop snake) new-head)
-          :stats {:turn (inc turn)
+          :stats {:turn           (inc turn)
                   :food-collected food-collected})))))
 
 ; =========== VIEW ============
@@ -107,18 +108,20 @@
       (doseq [[sx sy] snake]
         (s/put-string screen sx sy block {:fg :green})))))
 
-
 (defn draw-end-game [state]
   (clear-and-redraw
-    (let [reason (:game-over? state)
-          end-turn (get-in state [:stats :turn])
-          food-count (get-in state [:stats :food-collected])]
-      (s/put-string screen 0 0 "Game Over!")
-      (s/put-string screen 0 1 (str "Reason: " reason))
-      (s/put-string screen 0 2 (str "End turn: " end-turn))
-      (s/put-string screen 0 3 (str "Total food eaten: " food-count))
-      (s/put-string screen 0 4 (str "Snake size: " (count (:snake state))))
-      (s/put-string screen 0 5 "Thanks for playing! Press any key to quit"))))
+    (let [reason     (:game-over? state)
+          end-turn   (get-in state [:stats :turn])
+          food-count (get-in state [:stats :food-collected])
+          lines ["Game Over!"
+                 (str "Reason: " reason)
+                 (str "End turn: " end-turn)
+                 (str "Total food eaten: " food-count)
+                 (str "Snake size: " (count (:snake state)))
+                 "Thanks for playing! Press 'q' to quit"]]
+      (doseq [[i s] (map-indexed #(vector %1 %2) lines)]
+        (s/put-string screen 0 i s)))))
+
 
 ; ========= MAIN ==========
 
@@ -126,12 +129,16 @@
   "Runs a game of Snake in the terminal"
   [& args]
   (s/start screen)
-  (s/move-cursor screen (inc (* width 2)) height) ; moves cursor out of the way
+  ; moves cursor out of the way
+  (s/move-cursor screen (inc (* width 2)) height)
+
+  ; THE GAME LOOP
   (loop [state initial-state]
     (if (:game-over? state)
       (do
         (draw-end-game state)
-        (some #(= \q %) (repeatedly #(s/get-key-blocking screen)))
+        (some #(= \q %)
+              (repeatedly #(s/get-key-blocking screen)))
         (s/stop screen))
       (let [new-state (update-game state)]
         (draw-game new-state)
