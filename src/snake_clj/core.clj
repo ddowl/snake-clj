@@ -7,7 +7,7 @@
 (def ^:const height 15)
 (def screen (s/get-screen :swing))
 (def initial-state {:food       [4 5]
-                    ; TODO consider using java.util.ArrayDeque. for better performance retrieving head at last position
+                    ; TODO consider using a persistent dequeue for better performance retrieving head at last position
                     :snake      (conj PersistentQueue/EMPTY
                                       [2 1] [2 2] [2 3])
                     :dir        :down
@@ -27,8 +27,11 @@
     :right [(+ x 2) y]))
 
 ; TODO: buffer directional inputs
+; This feature would involve running a separate thread or go block to listen for directional inputs
+; The other thread of control would be writing directional inputs to some agent or atom, that this fn reads
 (defn next-dir [dir]
   (let [dir-in (or (s/get-key-blocking screen {:timeout 10}) dir)]
+    ; restrict movement back into snake body
     (case [dir-in dir]
       [:up :down] :down
       [:down :up] :up
@@ -60,30 +63,32 @@
     (out-of-bounds? state) "Out of Bounds"
     (overlap? state) "Overlap"))
 
-; TODO: come up with cleaner way to compose state updates
-; game over check, update dir, move snake and food
+(defn update-dir [state]
+  (update state :dir next-dir))
+
+(defn inc-turn-counter [state]
+  (update-in state [:stats :turn] inc))
+
+(defn move-snake [state]
+  (let [snake          (:snake state)
+        new-head       (next-cell (head snake) (:dir state))]
+    (if (= (:food state) new-head)
+      (let [new-snake (conj snake new-head)]
+        (-> state
+            (assoc :snake new-snake)
+            (assoc :food (open-rand-cell new-snake))
+            (update-in [:stats :food-collected] inc)))
+      (assoc state :snake (conj (pop snake) new-head)))))
+
 (defn update-game [state]
   (if-let [reason (game-over? state)]
     (assoc state :game-over? reason)
-    (let [snake          (:snake state)
-          dir            (next-dir (:dir state))
-          food           (:food state)
-          turn           (get-in state [:stats :turn])
-          food-collected (get-in state [:stats :food-collected])
-          new-head       (next-cell (head snake) dir)]
-      (if (= food new-head)
-        (let [new-snake (conj snake new-head)]
-          (assoc state
-            :dir dir
-            :snake new-snake
-            :food (open-rand-cell new-snake)
-            :stats {:turn           (inc turn)
-                    :food-collected (inc food-collected)}))
-        (assoc state
-          :dir dir
-          :snake (conj (pop snake) new-head)
-          :stats {:turn           (inc turn)
-                  :food-collected food-collected})))))
+    (-> state
+        update-dir
+        inc-turn-counter
+        move-snake)))
+
+
 
 ; =========== VIEW ============
 
