@@ -4,6 +4,8 @@
 
 ; =========== UPDATE ==========
 
+(defn head [s] (last s))
+
 (defn next-cell [[x y] dir]
   (case dir
     :up [x (dec y)]
@@ -28,7 +30,7 @@
 (defn out-of-bounds? [state]
   (let [width (:width state)
         height (:height state)
-        [[x y] & _] (:snake state)]
+        [x y] (head (:snake state))]
     (or (< x 0) (< y 0) (>= x (* width 2)) (>= y height))))
 
 (defn overlap? [state]
@@ -49,7 +51,7 @@
           height (:height state)
           dir (next-dir screen (:dir state))
           food (:food state)
-          new-head (next-cell (last snake) dir)]
+          new-head (next-cell (head snake) dir)]
       (if (= food new-head)
         (assoc state
           :dir dir
@@ -80,19 +82,22 @@
 ; ========= MAIN ==========
 (def screen (s/get-screen :swing))
 
+(def width 20)
+(def height 15)
+
 (defn -main
   "Runs a game of Snake in the terminal"
   [& args]
   (s/start screen)
-  (s/move-cursor screen -1 -1) ; TODO: doesn't actually hide cursor
+  (s/move-cursor screen (inc (* width 2)) height)
   (loop [state {:food [4 5]
                 :snake (conj clojure.lang.PersistentQueue/EMPTY ; TODO consider using java.util.ArrayDeque. for better performance retrieving head at last position
                              [2 1] [2 2] [2 3])
                 :dir :down
                 :game-over? false
                 :screen screen
-                :width 20
-                :height 15}]
+                :width width
+                :height height}]
     (if (:game-over? state)
       (do
         (println "Game Over!") ; TODO: print some stats!
