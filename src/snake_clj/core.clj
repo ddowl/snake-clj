@@ -2,8 +2,17 @@
   (:require [lanterna.screen :as s])
   (:require [clojure.string :refer [join]]))
 
-; TODO: break out main, update, view, constant files and import necessary values
-(declare screen width height)
+(def ^:const width 20)
+(def ^:const height 15)
+(def screen  (s/get-screen :swing))
+(def initial-state {:food [4 5]
+                    ; TODO consider using java.util.ArrayDeque. for better performance retrieving head at last position
+                    :snake (conj clojure.lang.PersistentQueue/EMPTY
+                                 [2 1] [2 2] [2 3])
+                    :dir :down
+                    :game-over? false
+                    :stats {:turn 0
+                            :food-collected 0}})
 
 ; =========== UPDATE ==========
 
@@ -79,57 +88,52 @@
 
 (def ^:const block "██")
 
+(defmacro clear-and-redraw [& body]
+  `(do
+     (s/clear screen)
+     (do ~@body)
+     (s/redraw screen)))
+
 (defn draw-game [state]
-  (let [[fx fy] (:food state)
-        snake (:snake state)]
-    ; Draw Walls
-    (s/put-string screen 0 height (join (repeat width block)) {:fg :yellow})
-    (doseq [y (range (inc height))]
-      (s/put-string screen (* width 2) y block {:fg :yellow}))
-    ; Draw game elements
-    (s/put-string screen fx fy block {:fg :red})
-    (doseq [[sx sy] snake]
-      (s/put-string screen sx sy block {:fg :green}))))
+  (clear-and-redraw
+    (let [[fx fy] (:food state)
+          snake (:snake state)]
+      ; Draw Walls
+      (s/put-string screen 0 height (join (repeat width block)) {:fg :yellow})
+      (doseq [y (range (inc height))]
+        (s/put-string screen (* width 2) y block {:fg :yellow}))
+      ; Draw game elements
+      (s/put-string screen fx fy block {:fg :red})
+      (doseq [[sx sy] snake]
+        (s/put-string screen sx sy block {:fg :green})))))
+
+
+(defn draw-end-game [state]
+  (clear-and-redraw
+    (let [reason (:game-over? state)
+          end-turn (get-in state [:stats :turn])
+          food-count (get-in state [:stats :food-collected])]
+      (s/put-string screen 0 0 "Game Over!")
+      (s/put-string screen 0 1 (str "Reason: " reason))
+      (s/put-string screen 0 2 (str "End turn: " end-turn))
+      (s/put-string screen 0 3 (str "Total food eaten: " food-count))
+      (s/put-string screen 0 4 (str "Snake size: " (count (:snake state))))
+      (s/put-string screen 0 5 "Thanks for playing! Press any key to quit"))))
 
 ; ========= MAIN ==========
-
-(def ^:const width 20)
-(def ^:const height 15)
-(def screen  (s/get-screen :swing))
-(def initial-state {:food [4 5]
-                    ; TODO consider using java.util.ArrayDeque. for better performance retrieving head at last position
-                    :snake (conj clojure.lang.PersistentQueue/EMPTY
-                                 [2 1] [2 2] [2 3])
-                    :dir :down
-                    :game-over? false
-                    :stats {:turn 0
-                            :food-collected 0}})
-
-(defn print-end-game [state]
-  (let [reason (:game-over? state)
-        end-turn (get-in state [:stats :turn])
-        food-count (get-in state [:stats :food-collected])]
-    (println "Game Over!")
-    (println "Reason:" reason)
-    (println "End turn:" end-turn)
-    (println "Total food eaten:" food-count)
-    (println "Snake size:" (count (:snake state)))))
-
 
 (defn -main
   "Runs a game of Snake in the terminal"
   [& args]
   (s/start screen)
-  (s/move-cursor screen (inc (* width 2)) height) ; move cursor out of the way
+  (s/move-cursor screen (inc (* width 2)) height) ; moves cursor out of the way
   (loop [state initial-state]
     (if (:game-over? state)
       (do
-        (print-end-game state)
-        ; TODO: wait for signal or something
+        (draw-end-game state)
+        (some #(= \q %) (repeatedly #(s/get-key-blocking screen)))
         (s/stop screen))
       (let [new-state (update-game state)]
-        (s/clear screen)
         (draw-game new-state)
-        (s/redraw screen)
         (Thread/sleep 50)
         (recur new-state)))))
