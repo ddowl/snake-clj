@@ -34,8 +34,10 @@
     (or (< x 0) (< y 0) (>= x (* width 2)) (>= y height))))
 
 (defn overlap? [state]
-  (let [[head & tail] (:snake state)]
-    (some #(= head %) tail)))
+  (let [s (:snake state)
+        h (head s)
+        t (butlast s)]
+    (some #(= h %) t)))
 
 (defn game-over? [state]
   (or (out-of-bounds? state) (overlap? state)))
@@ -84,20 +86,22 @@
 
 (def width 20)
 (def height 15)
+(def initial-state {:food [4 5]
+                    ; TODO consider using java.util.ArrayDeque. for better performance retrieving head at last position
+                    :snake (conj clojure.lang.PersistentQueue/EMPTY
+                                 [2 1] [2 2] [2 3])
+                    :dir :down
+                    :game-over? false
+                    :screen screen
+                    :width width
+                    :height height})
 
 (defn -main
   "Runs a game of Snake in the terminal"
   [& args]
   (s/start screen)
-  (s/move-cursor screen (inc (* width 2)) height)
-  (loop [state {:food [4 5]
-                :snake (conj clojure.lang.PersistentQueue/EMPTY ; TODO consider using java.util.ArrayDeque. for better performance retrieving head at last position
-                             [2 1] [2 2] [2 3])
-                :dir :down
-                :game-over? false
-                :screen screen
-                :width width
-                :height height}]
+  (s/move-cursor screen (inc (* width 2)) height) ; move cursor out of the way
+  (loop [state initial-state]
     (if (:game-over? state)
       (do
         (println "Game Over!") ; TODO: print some stats!
