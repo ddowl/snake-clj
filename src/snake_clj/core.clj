@@ -2,6 +2,9 @@
   (:require [lanterna.screen :as s])
   (:require [clojure.string :refer [join]]))
 
+; TODO: break out main, update, view, constant files and import necessary values
+(declare screen width height)
+
 ; =========== UPDATE ==========
 
 (defn head [s] (last s))
@@ -14,7 +17,7 @@
     :right [(+ x 2) y]))
 
 ; TODO: buffer directional inputs
-(defn next-dir [screen dir]
+(defn next-dir [dir]
   (let [dir-in (or (s/get-key-blocking screen {:timeout 10}) dir)]
     (case [dir-in dir]
       [:up :down] :down
@@ -23,14 +26,13 @@
       [:right :left] :left
       dir-in)))
 
+; TODO: only use rand-cell not covered by snake
 (defn rand-cell [w h]
   [(rand-nth (range 0 w 2))
    (rand-nth (range 0 h 2))])
 
 (defn out-of-bounds? [state]
-  (let [width (:width state)
-        height (:height state)
-        [x y] (head (:snake state))]
+  (let [[x y] (head (:snake state))]
     (or (< x 0) (< y 0) (>= x (* width 2)) (>= y height))))
 
 (defn overlap? [state]
@@ -40,61 +42,74 @@
     (some #(= h %) t)))
 
 (defn game-over? [state]
-  (or (out-of-bounds? state) (overlap? state)))
+  (cond
+    (out-of-bounds? state) "Out of Bounds"
+    (overlap? state) "Overlap"))
 
 ; TODO: come up with cleaner way to compose state updates
 ; game over check, update dir, move snake and food
 (defn update-game [state]
-  (if (game-over? state)
-    (assoc state :game-over? true)
+  (if-let [reason (game-over? state)]
+    (assoc state :game-over? reason)
     (let [snake (:snake state)
-          screen (:screen state)
-          width (:width state)
-          height (:height state)
-          dir (next-dir screen (:dir state))
+          dir (next-dir (:dir state))
           food (:food state)
+          turn (get-in state [:stats :turn])
+          food-collected (get-in state [:stats :food-collected])
           new-head (next-cell (head snake) dir)]
       (if (= food new-head)
         (assoc state
           :dir dir
           :snake (conj snake new-head)
-          :food (rand-cell width height))
+          :food (rand-cell width height)
+          :stats {:turn (inc turn)
+                  :food-collected (inc food-collected)})
         (assoc state
           :dir dir
-          :snake (conj (pop snake) new-head))))))
+          :snake (conj (pop snake) new-head)
+          :stats {:turn (inc turn)
+                  :food-collected food-collected})))))
 
 ; =========== VIEW ============
 
-(def block "██")
+(def ^:const block "██")
 
-(defn draw-game [screen state]
+(defn draw-game [state]
   (let [[fx fy] (:food state)
-        snake (:snake state)
-        w (:width state)
-        h (:height state)]
+        snake (:snake state)]
     ; Draw Walls
-    (s/put-string screen 0 h (join (repeat w block)) {:fg :yellow})
-    (doseq [y (range (inc h))]
-      (s/put-string screen (* w 2) y block {:fg :yellow}))
+    (s/put-string screen 0 height (join (repeat width block)) {:fg :yellow})
+    (doseq [y (range (inc height))]
+      (s/put-string screen (* width 2) y block {:fg :yellow}))
     ; Draw game elements
     (s/put-string screen fx fy block {:fg :red})
     (doseq [[sx sy] snake]
       (s/put-string screen sx sy block {:fg :green}))))
 
 ; ========= MAIN ==========
-(def screen (s/get-screen :swing))
 
-(def width 20)
-(def height 15)
+(def ^:const width 20)
+(def ^:const height 15)
+(def screen  (s/get-screen :swing))
 (def initial-state {:food [4 5]
                     ; TODO consider using java.util.ArrayDeque. for better performance retrieving head at last position
                     :snake (conj clojure.lang.PersistentQueue/EMPTY
                                  [2 1] [2 2] [2 3])
                     :dir :down
                     :game-over? false
-                    :screen screen
-                    :width width
-                    :height height})
+                    :stats {:turn 0
+                            :food-collected 0}})
+
+(defn print-end-game [state]
+  (let [reason (:game-over? state)
+        end-turn (get-in state [:stats :turn])
+        food-count (get-in state [:stats :food-collected])]
+    (println "Game Over!")
+    (println "Reason:" reason)
+    (println "End turn:" end-turn)
+    (println "Total food eaten:" food-count)
+    (println "Snake size:" (count (:snake state)))))
+
 
 (defn -main
   "Runs a game of Snake in the terminal"
@@ -104,12 +119,12 @@
   (loop [state initial-state]
     (if (:game-over? state)
       (do
-        (println "Game Over!") ; TODO: print some stats!
-        (Thread/sleep 3000) ; TODO: wait for signal or something
+        (print-end-game state)
+        ; TODO: wait for signal or something
         (s/stop screen))
       (let [new-state (update-game state)]
         (s/clear screen)
-        (draw-game screen new-state)
+        (draw-game new-state)
         (s/redraw screen)
         (Thread/sleep 50)
         (recur new-state)))))
