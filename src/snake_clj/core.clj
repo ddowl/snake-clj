@@ -6,18 +6,21 @@
 (def ^:const width 20)
 (def ^:const height 15)
 (def screen (s/get-screen :swing))
-(def initial-state {:food       [4 5]
-                    ; TODO consider using a persistent dequeue for better performance retrieving head at last position
+(def initial-state {; TODO consider using a persistent dequeue for better performance retrieving head at last position
                     :snake      (conj PersistentQueue/EMPTY
                                       [2 1] [2 2] [2 3])
+                    :food       [4 5]
                     :dir        :down
                     :game-over? false
                     :stats      {:turn           0
                                  :food-collected 0}})
 
+
 ; =========== UPDATE ==========
 
 (defn head [s] (last s))
+
+(def valid-directions #{:up :down :left :right})
 
 (defn next-cell [[x y] dir]
   (case dir
@@ -30,14 +33,20 @@
 ; This feature would involve running a separate thread or go block to listen for directional inputs
 ; The other thread of control would be writing directional inputs to some agent or atom, that this fn reads
 (defn next-dir [dir]
-  (let [dir-in (or (s/get-key-blocking screen {:timeout 10}) dir)]
-    ; restrict movement back into snake body
-    (case [dir-in dir]
-      [:up :down] :down
-      [:down :up] :up
-      [:left :right] :right
-      [:right :left] :left
-      dir-in)))
+  (let [in-key (s/get-key-blocking screen {:timeout 10})]
+    (or
+      (and
+        ; ensure in-key is a direction
+        (valid-directions in-key)
+        ; restrict movement back into snake body
+        (case [in-key dir]
+          [:up :down] :down
+          [:down :up] :up
+          [:left :right] :right
+          [:right :left] :left
+          in-key))
+      ; otherwise fallback to last dir
+      dir)))
 
 (defn rand-cell []
   [(* (rand-int (quot width 2)) 2)
@@ -87,7 +96,6 @@
         update-dir
         inc-turn-counter
         move-snake)))
-
 
 
 ; =========== VIEW ============
