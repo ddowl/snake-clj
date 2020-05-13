@@ -26,10 +26,14 @@
       [:right :left] :left
       dir-in)))
 
-; TODO: only use rand-cell not covered by snake
-(defn rand-cell [w h]
-  [(rand-nth (range 0 w 2))
-   (rand-nth (range 0 h 2))])
+(defn rand-cell []
+  [(* (rand-int (quot width 2)) 2)
+   (rand-int height)])
+
+(defn open-rand-cell [covered-coords]
+  (let [covered-set (set covered-coords)]
+    (some #(if (not (covered-set %)) %)
+          (repeatedly rand-cell))))
 
 (defn out-of-bounds? [state]
   (let [[x y] (head (:snake state))]
@@ -58,12 +62,13 @@
           food-collected (get-in state [:stats :food-collected])
           new-head (next-cell (head snake) dir)]
       (if (= food new-head)
-        (assoc state
-          :dir dir
-          :snake (conj snake new-head)
-          :food (rand-cell width height)
-          :stats {:turn (inc turn)
-                  :food-collected (inc food-collected)})
+        (let [new-snake (conj snake new-head)]
+          (assoc state
+            :dir dir
+            :snake new-snake
+            :food (open-rand-cell new-snake)
+            :stats {:turn (inc turn)
+                    :food-collected (inc food-collected)}))
         (assoc state
           :dir dir
           :snake (conj (pop snake) new-head)
