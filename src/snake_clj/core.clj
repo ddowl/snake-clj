@@ -148,7 +148,8 @@
         (draw-end-game state)
         (some #(= \q %)
               (repeatedly #(s/get-key-blocking screen)))
-        (s/stop screen))
+        (s/stop screen)
+        (System/exit 0))
       (let [new-state (update-game state)]
         (draw-game new-state)
         (Thread/sleep 50)
