@@ -1,14 +1,12 @@
 (ns snake-clj.core
   (:require [lanterna.screen :as s])
   (:require [clojure.string :refer [join]])
-  (:import (clojure.lang PersistentQueue)))
+  (:use [clojure.data.finger-tree :only [double-list conjl]]))
 
 (def ^:const width 20)
 (def ^:const height 15)
 (def screen (s/get-screen :swing))
-(def initial-state {; TODO consider using a persistent dequeue for better performance retrieving head at last position
-                    :snake      (conj PersistentQueue/EMPTY
-                                      [2 1] [2 2] [2 3])
+(def initial-state {:snake      (double-list [2 3] [2 2] [2 1])
                     :food       [4 5]
                     :dir        :down
                     :game-over? false
@@ -17,8 +15,6 @@
 
 
 ; =========== UPDATE ==========
-
-(defn head [s] (last s))
 
 (def valid-directions #{:up :down :left :right})
 
@@ -58,13 +54,13 @@
           (repeatedly rand-cell))))
 
 (defn out-of-bounds? [state]
-  (let [[x y] (head (:snake state))]
+  (let [[x y] (first (:snake state))]
     (or (< x 0) (< y 0) (>= x (* width 2)) (>= y height))))
 
 (defn overlap? [state]
   (let [s (:snake state)
-        h (head s)
-        t (butlast s)]
+        h (first s)
+        t (rest s)]
     (some #(= h %) t)))
 
 (defn game-over? [state]
@@ -80,14 +76,14 @@
 
 (defn move-snake [state]
   (let [snake          (:snake state)
-        new-head       (next-cell (head snake) (:dir state))]
+        new-head       (next-cell (first snake) (:dir state))]
     (if (= (:food state) new-head)
-      (let [new-snake (conj snake new-head)]
+      (let [new-snake (conjl snake new-head)]
         (-> state
             (assoc :snake new-snake)
             (assoc :food (open-rand-cell new-snake))
             (update-in [:stats :food-collected] inc)))
-      (assoc state :snake (conj (pop snake) new-head)))))
+      (assoc state :snake (conjl (pop snake) new-head)))))
 
 (defn update-game [state]
   (if-let [reason (game-over? state)]
